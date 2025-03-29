@@ -1,364 +1,268 @@
 import streamlit as st
-import time
-import base64
-from PIL import Image
+import json
+import openai
+from fpdf import FPDF
 import io
-import pandas as pd
+import tempfile
+import os
+import unicodedata
+import base64
 
-# Set page configuration
-st.set_page_config(
-    page_title="Clinical Documentation Assistant",
-    page_icon="🏥",
-    layout="centered",
-    initial_sidebar_state="collapsed"
-)
+# Set the title of the browser tab
+st.set_page_config(page_title="Clinical Documentation Assistant")
 
-# Custom CSS for animations and styling
-st.markdown("""
-<style>
-    /* Gradient background and overall styling */
-    .stApp {
-        background: linear-gradient(135deg, #f5f7fa 0%, #e4edf5 100%);
-    }
-    
-    /* Card styling */
-    div.stButton > button {
-        background: linear-gradient(90deg, #3a7bd5, #00d2ff);
-        color: white;
-        border-radius: 10px;
-        padding: 0.5rem 1rem;
-        border: none;
-        box-shadow: 0 4px 6px rgba(50, 50, 93, 0.11), 0 1px 3px rgba(0, 0, 0, 0.08);
-        transition: all 0.3s ease;
-    }
-    div.stButton > button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 7px 14px rgba(50, 50, 93, 0.1), 0 3px 6px rgba(0, 0, 0, 0.08);
-    }
-    
-    /* Input field styling */
-    div.stTextInput > div > div > input {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        padding: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-        transition: all 0.3s ease;
-    }
-    div.stTextInput > div > div > input:focus {
-        border-color: #3a7bd5;
-        box-shadow: 0 0 0 2px rgba(58, 123, 213, 0.2);
-    }
-    
-    /* Text area styling */
-    div.stTextArea > div > div > textarea {
-        border-radius: 10px;
-        border: 1px solid #e0e0e0;
-        padding: 1rem;
-        box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-    }
-    
-    /* Animation classes */
-    @keyframes fadeInUp {
-        from {
-            opacity: 0;
-            transform: translate3d(0, 20px, 0);
-        }
-        to {
-            opacity: 1;
-            transform: translate3d(0, 0, 0);
-        }
-    }
-    
-    .animate-fadeInUp {
-        animation: fadeInUp 0.5s ease forwards;
-    }
-    
-    /* Delay classes for staggered animations */
-    .delay-1 { animation-delay: 0.1s; opacity: 0; }
-    .delay-2 { animation-delay: 0.2s; opacity: 0; }
-    .delay-3 { animation-delay: 0.3s; opacity: 0; }
-    .delay-4 { animation-delay: 0.4s; opacity: 0; }
-    .delay-5 { animation-delay: 0.5s; opacity: 0; }
-    .delay-6 { animation-delay: 0.6s; opacity: 0; }
-    .delay-7 { animation-delay: 0.7s; opacity: 0; }
-    .delay-8 { animation-delay: 0.8s; opacity: 0; }
-    .delay-9 { animation-delay: 0.9s; opacity: 0; }
-    .delay-10 { animation-delay: 1.0s; opacity: 0; }
-    
-    /* Section styling */
-    .section-container {
-        background-color: white;
-        border-radius: 15px;
-        padding: 20px;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 6px rgba(0, 0, 0, 0.05);
-    }
-    
-    /* Header styling */
-    .header {
-        text-align: center;
-        margin-bottom: 2rem;
-    }
-    
-    /* Success animation */
-    @keyframes successPulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-    
-    .success-animation {
-        animation: successPulse 0.5s ease-in-out;
-    }
-    
-    /* Custom label styling */
-    .custom-label {
-        font-weight: 600;
-        color: #555;
-        margin-bottom: 5px;
-        font-size: 0.9rem;
-    }
-    
-    /* Progress bar styling */
-    .stProgress > div > div > div {
-        background-color: #3a7bd5;
-    }
-    
-    /* Icon container */
-    .icon-container {
-        display: flex;
-        justify-content: center;
-        margin-bottom: 1rem;
-    }
-    
-    /* Pulse animation for the icon */
-    @keyframes pulse {
-        0% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-        100% { transform: scale(1); }
-    }
-    
-    .pulse {
-        animation: pulse 2s infinite;
-    }
-</style>
-""", unsafe_allow_html=True)
+# OpenAI API Key (ensure to set this securely)
+OPENAI_API_KEY = ""
+openai.api_key = OPENAI_API_KEY
 
-# Function to create animated containers with delay
-def animated_container(content, delay_class):
-    return st.markdown(f"""
-    <div class="animate-fadeInUp {delay_class}">
-        {content}
-    </div>
-    """, unsafe_allow_html=True)
 
-# Function to encode image to base64
-def get_image_base64(image_path):
+def add_background(image_file):
+    """Adds a blurred background image to the Streamlit app."""
+    bg_ext = image_file.split('.')[-1]
+
+    with open(image_file, "rb") as img_file:
+        encoded_string = base64.b64encode(img_file.read()).decode()
+
+    bg_css = f"""
+    <style>
+        #clinical-documentation-assistant, #enter-patient-details {{
+            color: #FFFFFF;
+        }}
+        .stAppHeader {{
+            background: transparent;
+        }}
+        .stApp {{
+        }}
+        [data-testid="stAppViewContainer"] {{
+            backdrop-filter: blur(8px);
+            padding: 20px;
+        }}
+        .stTextInput, .stButton, .stTextArea {{
+            border-radius: 10px;
+            color: #0d0c22;
+        }}
+        [data-testid=stMarkdownContainer] p {{
+            color: #0d0c22;
+        }}
+        .stButton > button {{
+            color: white !important;
+            border-radius: 8px;
+            padding: 10px 15px;
+            font-size: 16px;
+        }}
+        /* Header Styling */
+        .header-container {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 20px 0 20px 20px;
+            text-align: left;
+            font-size: 18px;
+            font-weight: bold;
+            color: #0d0c22;
+            z-index: 1000;
+        }}
+        #enter-patient-details {{
+            color: #0d0c22;
+        }}
+        /* Space below the header */
+        .stApp > div:first-child {{
+            padding-top: 80px;
+        }}
+        
+        .stAppDeployButton {{
+            display: none;
+        }}
+        
+        .stMainMenu {{
+            display: none;
+        }}
+    </style>
+    """
+    st.markdown(bg_css, unsafe_allow_html=True)
+
+# Apply background image
+add_background("background.jpg")
+
+def generate_soap_note(ehr_data):
+    prompt = f"""
+    Generate a structured SOAP note based on the following patient data:
+    {json.dumps(ehr_data, indent=2)}
+
+    Format:
+    **S:** (Subjective - patient-reported symptoms)
+    **O:** (Objective - vitals, labs, exam findings)
+    **A:** (Assessment - diagnosis, clinical reasoning)
+    **P:** (Plan - treatment, follow-up recommendations)
+    **ICD-10 Codes:** (Relevant ICD-10 codes)
+    **CPT Code:** (Relevant CPT code)
+    """
+
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": "You are a medical documentation assistant."},
+                  {"role": "user", "content": prompt}],
+        max_tokens=500
+    )
+
+    return response["choices"][0]["message"]["content"].strip()
+
+def remove_non_ascii(text):
+    return ''.join([c for c in unicodedata.normalize('NFD', text) if unicodedata.category(c) != 'Mn'])
+
+def replace_special_characters(text):
+    replacements = {
+        '\u2019': "'",  # Right single quote (’)
+        '\u2013': '-',  # En-dash
+        '\u2014': '-',  # Em-dash
+    }
+    for old, new in replacements.items():
+        text = text.replace(old, new)
+    return text
+
+def sanitize_text(text):
+    text = remove_non_ascii(text)
+    text = replace_special_characters(text)
+    return text
+
+def convert_bold_text(text, pdf):
+    parts = text.split("**")
+    for i, part in enumerate(parts):
+        if i % 2 == 1:
+            pdf.set_font("Arial", style="B", size=12)
+        else:
+            pdf.set_font("Arial", style="", size=12)
+        pdf.multi_cell(0, 10, part)
+
+def export_to_pdf(ehr_data, soap_note, icd_cpt_input):
+    soap_note = sanitize_text(soap_note)
+    pdf = FPDF()
+    pdf.set_auto_page_break(auto=True, margin=15)
+    pdf.add_page()
+    pdf.set_font("Arial", size=12)
+
+    # Add logo
+    if os.path.exists("logo.png"):
+        pdf.image("header-logo.png", x=10, y=8, w=30)
+    pdf.ln(40)
+
+    pdf.multi_cell(0, 10, f"Patient ID: {ehr_data['PatientID']}")
+    pdf.multi_cell(0, 10, f"Chief Complaint: {ehr_data['ChiefComplaint']}")
+    pdf.multi_cell(0, 10, f"Conditions: {', '.join(ehr_data['Conditions'])}")
+    pdf.multi_cell(0, 10, f"Vitals: BP {ehr_data['Vitals']['BP']}, HR {ehr_data['Vitals']['HR']}, SpO2 {ehr_data['Vitals']['SpO2']}")
+    pdf.multi_cell(0, 10, f"Labs: HbA1c {ehr_data['Labs']['HbA1c']}, CBC {ehr_data['Labs']['CBC']}")
+    pdf.multi_cell(0, 10, f"Medications: {', '.join(ehr_data['MedicationRequest'])}")
+    pdf.ln(10)
+
+    pdf.multi_cell(0, 10, "SOAP Note:")
+    convert_bold_text(soap_note, pdf)
+    pdf.ln(10)
+
+    pdf.multi_cell(0, 10, "ICD-10/CPT Codes:")
+    pdf.multi_cell(0, 10, icd_cpt_input)
+
+    tmp_file_path = tempfile.mktemp(suffix=".pdf")
+    pdf.output(tmp_file_path)
+
+    pdf_bytes = io.BytesIO()
+    with open(tmp_file_path, "rb") as f:
+        pdf_bytes.write(f.read())
+
+    pdf_bytes.seek(0)
+    os.remove(tmp_file_path)
+    return pdf_bytes
+
+# UI Components
+# st.image("logo.png", width=150)
+# Create a fixed header with an image next to the text
+
+# Function to encode image as Base64
+def image_to_base64(image_path):
     with open(image_path, "rb") as img_file:
         return base64.b64encode(img_file.read()).decode()
 
-# Helper function to simulate loading
-def simulate_processing():
-    progress_bar = st.progress(0)
-    for i in range(100):
-        time.sleep(0.01)
-        progress_bar.progress(i + 1)
-    st.success("✅ Processing complete!")
-    time.sleep(1)
-    progress_bar.empty()
+# Convert the header logo to Base64
+header_logo_base64 = image_to_base64("header-logo.png")
 
-# Medical bot SVG icon (embedded directly)
-medical_bot_svg = """
-<svg width="120" height="120" viewBox="0 0 120 120" fill="none" xmlns="http://www.w3.org/2000/svg">
-    <circle cx="60" cy="40" r="25" fill="#3a7bd5" />
-    <rect x="35" y="65" width="50" height="30" rx="5" fill="#3a7bd5" />
-    <circle cx="45" cy="40" r="5" fill="white" />
-    <circle cx="75" cy="40" r="5" fill="white" />
-    <path d="M50 50 Q60 60 70 50" stroke="white" stroke-width="3" />
-    <rect x="50" y="20" width="20" height="5" rx="2.5" fill="#ff5757" />
-    <rect x="57.5" y="12.5" width="5" height="20" rx="2.5" fill="#ff5757" />
-    <rect x="25" y="95" width="10" height="20" rx="5" fill="#3a7bd5" />
-    <rect x="85" y="95" width="10" height="20" rx="5" fill="#3a7bd5" />
-</svg>
+header_html = """
+<div class="header-container">
+    <img src="data:image/png;base64,{header_logo_base64}" alt="Logo">
+    <span>Clinical Documentation Assistant</span>
+</div>
 """
+# Apply CSS for header styling
+st.markdown(
+    f"""
+    <style>
+        /* Fixed header styling */
+        .header-container {{
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px 0 15px 10px;
+            gap: 15px;
+            font-size: 20px;
+            font-weight: bold;
+            color: #000000;
+            z-index: 1000;
+        }}
 
-# Display header with animated icon
-st.markdown(f"""
-<div class="header animate-fadeInUp">
-    <div class="icon-container pulse">
-        {medical_bot_svg}
+        /* Logo styling */
+        .header-container img {{
+            height: 38px;
+            width: auto;
+        }}
+
+        /* Adjust padding to prevent content overlap */
+        .stApp > div:first-child {{
+            padding-top: 80px;
+        }}
+    </style>
+
+    <div class="header-container">
+        <img src="data:image/png;base64,{header_logo_base64}" alt="Logo">
+        <span>Clinical Documentation Assistant</span>
     </div>
-    <h1>Clinical Documentation Assistant</h1>
-    <p style="color: #666; font-size: 1.1rem;">Streamline your medical documentation workflow</p>
-</div>
-""", unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True
+)
+# st.title("Clinical Documentation Assistant")
 
-# Create tabs for a multi-step process
-tabs = st.tabs(["Patient Info", "Vitals & Labs", "Generate Note"])
+st.subheader("Enter Patient Details")
+patient_id = st.text_input("Patient ID", "20351235")
+chief_complaint = st.text_input("Chief Complaint", "Shortness of breath")
+conditions = st.text_area("Conditions (comma-separated)", "Hypertension, Diabetes")
+bp = st.text_input("Blood Pressure", "150/90")
+hr = st.text_input("Heart Rate", "98")
+spo2 = st.text_input("SpO2", "91%")
+hba1c = st.text_input("HbA1c", "8.2%")
+cbc = st.text_input("CBC", "Normal")
+medications = st.text_area("Medications (comma-separated)", "Metformin, Lisinopril")
 
-# Tab 1: Patient Information
-with tabs[0]:
-    st.markdown('<div class="section-container animate-fadeInUp delay-1">', unsafe_allow_html=True)
-    st.subheader("Patient Details")
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        st.markdown('<div class="custom-label">Patient ID</div>', unsafe_allow_html=True)
-        patient_id = st.text_input("", value="2031125", key="patient_id", label_visibility="collapsed")
-    
-    with col2:
-        st.markdown('<div class="custom-label">Visit Date</div>', unsafe_allow_html=True)
-        visit_date = st.date_input("", label_visibility="collapsed")
-    
-    st.markdown('<div class="custom-label animate-fadeInUp delay-2">Chief Complaint</div>', unsafe_allow_html=True)
-    chief_complaint = st.text_input("", value="Shortness of breath", key="chief_complaint", label_visibility="collapsed")
-    
-    st.markdown('<div class="custom-label animate-fadeInUp delay-3">Conditions (comma-separated)</div>', unsafe_allow_html=True)
-    conditions = st.text_area("", value="Hypertension, Diabetes", height=100, key="conditions", label_visibility="collapsed")
-    
-    st.markdown('<div class="custom-label animate-fadeInUp delay-4">Medications (comma-separated)</div>', unsafe_allow_html=True)
-    medications = st.text_area("", value="Metformin, Lisinopril", height=100, key="medications", label_visibility="collapsed")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Next button with animation
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col2:
-        if st.button("Next: Vitals & Labs", key="next_to_vitals"):
-            tabs[1].selectbox = True
+generate_button = st.button("Generate SOAP Note")
 
-# Tab 2: Vitals and Labs
-with tabs[1]:
-    st.markdown('<div class="section-container animate-fadeInUp delay-1">', unsafe_allow_html=True)
-    st.subheader("Vitals & Laboratory Results")
-    
-    col1, col2 = st.columns(2)
-    
-    with col1:
-        st.markdown('<div class="custom-label">Blood Pressure (mmHg)</div>', unsafe_allow_html=True)
-        bp = st.text_input("", value="150/90", key="bp", label_visibility="collapsed")
-        
-        st.markdown('<div class="custom-label">Heart Rate (bpm)</div>', unsafe_allow_html=True)
-        hr = st.text_input("", value="98", key="hr", label_visibility="collapsed")
-        
-        st.markdown('<div class="custom-label">Temperature (°F)</div>', unsafe_allow_html=True)
-        temp = st.text_input("", value="98.6", key="temp", label_visibility="collapsed")
-    
-    with col2:
-        st.markdown('<div class="custom-label">SpO2 (%)</div>', unsafe_allow_html=True)
-        spo2 = st.text_input("", value="91%", key="spo2", label_visibility="collapsed")
-        
-        st.markdown('<div class="custom-label">HbA1c (%)</div>', unsafe_allow_html=True)
-        hba1c = st.text_input("", value="8.2%", key="hba1c", label_visibility="collapsed")
-        
-        st.markdown('<div class="custom-label">CBC</div>', unsafe_allow_html=True)
-        cbc = st.text_input("", value="Normal", key="cbc", label_visibility="collapsed")
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Lab results visualization (simple example)
-    st.markdown('<div class="section-container animate-fadeInUp delay-3">', unsafe_allow_html=True)
-    st.subheader("Lab Trends")
-    
-    # Sample data for demonstration
-    chart_data = pd.DataFrame({
-        'Date': ['Jan', 'Feb', 'Mar', 'Apr', 'May'],
-        'HbA1c': [8.5, 8.4, 8.3, 8.2, 8.2],
-        'Glucose': [180, 175, 165, 160, 155]
-    })
-    
-    st.line_chart(chart_data.set_index('Date'))
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Navigation buttons
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        if st.button("Back to Patient Info", key="back_to_patient"):
-            tabs[0].selectbox = True
-    with col3:
-        if st.button("Next: Generate Note", key="next_to_generate"):
-            tabs[2].selectbox = True
+if generate_button:
+    ehr_data = {
+        "PatientID": patient_id,
+        "ChiefComplaint": chief_complaint,
+        "Conditions": [c.strip() for c in conditions.split(",")],
+        "Vitals": {"BP": bp, "HR": hr, "SpO2": spo2},
+        "Labs": {"HbA1c": hba1c, "CBC": cbc},
+        "MedicationRequest": [m.strip() for m in medications.split(",")]
+    }
 
-# Tab 3: Generate SOAP Note
-with tabs[2]:
-    st.markdown('<div class="section-container animate-fadeInUp delay-1">', unsafe_allow_html=True)
-    st.subheader("Generate SOAP Note")
-    
-    note_type = st.selectbox("Note Type", ["SOAP Note", "Progress Note", "Discharge Summary", "Consultation"])
-    
-    # Additional context options
-    st.markdown('<div class="custom-label animate-fadeInUp delay-2">Additional Context (optional)</div>', unsafe_allow_html=True)
-    additional_context = st.text_area("", height=100, label_visibility="collapsed")
-    
-    # Generate button with animation
-    if st.button("Generate Note", key="generate_note"):
-        with st.spinner("Generating comprehensive medical note..."):
-            simulate_processing()
-        
-        # Display generated note with animation
-        st.markdown('<div class="section-container animate-fadeInUp success-animation">', unsafe_allow_html=True)
-        st.subheader("Generated SOAP Note")
-        
-        soap_note = f"""
-        # SOAP Note
-        **Date:** {time.strftime("%Y-%m-%d")}
-        **Patient ID:** {patient_id}
-        
-        ## Subjective
-        Patient presents with chief complaint of shortness of breath. Patient has a history of hypertension and diabetes. Currently on Metformin and Lisinopril.
-        
-        ## Objective
-        **Vitals:**
-        - BP: {bp}
-        - HR: {hr} bpm
-        - SpO2: {spo2}
-        - Temperature: 98.6°F
-        
-        **Labs:**
-        - HbA1c: {hba1c}
-        - CBC: {cbc}
-        
-        ## Assessment
-        1. Shortness of breath - likely due to poor glycemic control and possible early CHF
-        2. Hypertension - poorly controlled
-        3. Diabetes Type 2 - suboptimal control
-        
-        ## Plan
-        1. Increase Lisinopril to 20mg daily
-        2. Add Furosemide 20mg daily
-        3. Adjust Metformin dosage
-        4. Schedule follow-up in 2 weeks
-        5. Order echocardiogram
-        """
-        
-        st.markdown(soap_note)
-        
-        # Action buttons
-        col1, col2 = st.columns(2)
-        with col1:
-            st.download_button(
-                label="Download Note",
-                data=soap_note,
-                file_name="soap_note.md",
-                mime="text/markdown"
-            )
-        with col2:
-            if st.button("Copy to Clipboard", key="copy_note"):
-                st.success("Note copied to clipboard!")
-        
-        st.markdown('</div>', unsafe_allow_html=True)
-    
-    st.markdown('</div>', unsafe_allow_html=True)
-    
-    # Back button
-    col1, col2, col3 = st.columns([1, 1, 1])
-    with col1:
-        if st.button("Back to Vitals & Labs", key="back_to_vitals"):
-            tabs[1].selectbox = True
+    soap_note = generate_soap_note(ehr_data)
+    formatted_soap_note = soap_note.replace("**", "")
+    st.markdown(formatted_soap_note)
 
-# Footer with animation
-st.markdown("""
-<div class="animate-fadeInUp delay-10" style="text-align: center; margin-top: 2rem; padding: 1rem; color: #666;">
-    <p>© 2023 Clinical Documentation Assistant | Powered by AI</p>
-</div>
-""", unsafe_allow_html=True)
+    icd_cpt_suggestions = "ICD-10: I50.9 (Heart failure, unspecified), E11.65 (Type 2 DM with hyperglycemia)\nCPT: 99214 (Established patient office visit, moderate complexity)"
+    icd_cpt_input = st.text_area("ICD-10/CPT Codes", icd_cpt_suggestions)
+
+    try:
+        sanitized_soap = sanitize_text(soap_note)
+        pdf_bytes = export_to_pdf(ehr_data, sanitized_soap, icd_cpt_input)
+        st.download_button("Download PDF", pdf_bytes, file_name="SOAP_Note.pdf", mime="application/pdf")
+    except Exception as e:
+        st.error(f"Error generating PDF: {str(e)}")
