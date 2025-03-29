@@ -1,10 +1,6 @@
 import streamlit as st
 import time
 import pandas as pd
-from streamlit_lottie import streamlit_lottie
-import requests
-import json
-from streamlit_option_menu import option_menu
 import altair as alt
 
 # Page configuration
@@ -37,11 +33,6 @@ st.markdown("""
         padding: 1.5rem;
         margin-bottom: 1rem;
         background: white;
-        transition: transform 0.3s ease, box-shadow 0.3s ease;
-    }
-    .stCard:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 12px 20px rgba(0,0,0,0.15);
     }
     
     /* Section headers */
@@ -52,45 +43,6 @@ st.markdown("""
         margin-top: 0.5rem;
         margin-bottom: 0.5rem;
     }
-    
-    /* Input fields styling */
-    div[data-baseweb="input"] {
-        border-radius: 8px;
-        transition: all 0.3s ease;
-    }
-    div[data-baseweb="input"]:focus-within {
-        border-color: #5e60ce !important;
-        box-shadow: 0 0 0 2px rgba(94, 96, 206, 0.2);
-    }
-    
-    /* Button styling */
-    .stButton button {
-        background: linear-gradient(90deg, #3a8dde 0%, #5e60ce 100%);
-        color: white;
-        font-weight: 600;
-        border: none;
-        border-radius: 8px;
-        padding: 0.5rem 1.5rem;
-        transition: all 0.3s ease;
-    }
-    .stButton button:hover {
-        transform: translateY(-2px);
-        box-shadow: 0 4px 12px rgba(94, 96, 206, 0.3);
-    }
-    
-    /* Animation for elements */
-    @keyframes fadeIn {
-        from { opacity: 0; transform: translateY(20px); }
-        to { opacity: 1; transform: translateY(0); }
-    }
-    .animate {
-        animation: fadeIn 0.6s ease forwards;
-    }
-    .delay-1 { animation-delay: 0.1s; }
-    .delay-2 { animation-delay: 0.2s; }
-    .delay-3 { animation-delay: 0.3s; }
-    .delay-4 { animation-delay: 0.4s; }
-    .delay-5 { animation-delay: 0.5s; }
     
     /* Progress indicator */
     .progress-indicator {
@@ -113,7 +65,6 @@ st.markdown("""
         justify-content: center;
         align-items: center;
         margin-bottom: 0.5rem;
-        transition: all 0.3s ease;
         color: white;
         font-weight: bold;
     }
@@ -154,11 +105,6 @@ st.markdown("""
         box-shadow: 0 4px 12px rgba(0,0,0,0.08);
         flex: 1;
         min-width: 150px;
-        transition: all 0.3s ease;
-    }
-    .vital-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 6px 16px rgba(0,0,0,0.12);
     }
     .vital-title {
         color: #666;
@@ -173,35 +119,15 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-# Function to load Lottie animations
-def load_lottieurl(url):
-    r = requests.get(url)
-    if r.status_code != 200:
-        return None
-    return r.json()
-
-# Load animations
-lottie_doctor = load_lottieurl("https://assets5.lottiefiles.com/packages/lf20_5njp3vgg.json")
-lottie_health = load_lottieurl("https://assets1.lottiefiles.com/packages/lf20_5tl1xxnz.json")
-
 # Sidebar
 with st.sidebar:
-    st.markdown("<div style='text-align: center; margin-bottom: 1rem;'>", unsafe_allow_html=True)
-    streamlit_lottie(lottie_doctor, height=180, key="doctor_animation")
-    st.markdown("</div>", unsafe_allow_html=True)
+    st.title("Clinical Assistant")
     
-    selected = option_menu(
-        menu_title="Clinical Assistant",
-        options=["Patient Info", "Vitals", "Assessment", "Plan", "Generate Note"],
-        icons=["person-vcard", "heart-pulse", "clipboard-check", "clipboard-plus", "file-earmark-medical"],
-        menu_icon="hospital",
-        default_index=0,
-        styles={
-            "container": {"padding": "0!important", "background-color": "#f8f9fa"},
-            "icon": {"color": "#3a8dde", "font-size": "16px"},
-            "nav-link": {"font-size": "14px", "text-align": "left", "margin": "0px", "--hover-color": "#eee"},
-            "nav-link-selected": {"background-color": "#3a8dde", "color": "white"},
-        }
+    # Simple navigation instead of option_menu
+    selected = st.radio(
+        "Navigation",
+        ["Patient Info", "Vitals", "Assessment", "Plan", "Generate Note"],
+        label_visibility="collapsed"
     )
     
     st.markdown("---")
@@ -215,7 +141,7 @@ with st.sidebar:
     
     for patient in recent_patients:
         st.markdown(f"""
-        <div style='padding: 0.5rem; border-radius: 8px; margin-bottom: 0.5rem; cursor: pointer; transition: all 0.2s ease; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);' onmouseover='this.style.backgroundColor="#f0f7ff"' onmouseout='this.style.backgroundColor="white"'>
+        <div style='padding: 0.5rem; border-radius: 8px; margin-bottom: 0.5rem; background-color: white; box-shadow: 0 2px 5px rgba(0,0,0,0.05);'>
             <div style='font-weight: 600; color: #333;'>{patient["name"]}</div>
             <div style='font-size: 0.8rem; color: #666;'>ID: {patient["id"]} | Age: {patient["age"]}</div>
         </div>
@@ -268,12 +194,6 @@ st.markdown("""
     'active' if current_step >= 5 else ''
 ), unsafe_allow_html=True)
 
-# Staggered animation function
-def staggered_animation(elements, delay=0.1):
-    for i, element in enumerate(elements):
-        time.sleep(delay)
-        st.markdown(f"<div class='animate delay-{i+1}'>{element}</div>", unsafe_allow_html=True)
-
 # Patient Info Section
 if selected == "Patient Info":
     col1, col2 = st.columns([2, 1])
@@ -300,7 +220,6 @@ if selected == "Patient Info":
     
     with col2:
         st.markdown("<div class='stCard'>", unsafe_allow_html=True)
-        streamlit_lottie(lottie_health, height=200, key="health_animation")
         st.markdown("<h3 class='section-header'>Quick Actions</h3>", unsafe_allow_html=True)
         st.button("View Patient History")
         st.button("Check Allergies")
@@ -382,8 +301,6 @@ elif selected == "Vitals":
             title='Glucose Trend',
             width=300,
             height=200
-        ).configure_title(
-            fontSize=14
         )
         
         st.altair_chart(chart)
@@ -436,41 +353,16 @@ elif selected == "Plan":
     
     with col1:
         st.markdown("<h4 style='color: #5e60ce; font-size: 1rem;'>Medications</h4>", unsafe_allow_html=True)
-        st.markdown("""
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;'>
-            <div style='display: flex; align-items: center;'>
-                <div style='background: #3a8dde; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;'></div>
-                <div style='font-weight: 500;'>Continue Lisinopril 10mg daily</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
         
-        st.markdown("""
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;'>
-            <div style='display: flex; align-items: center;'>
-                <div style='background: #3a8dde; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;'></div>
-                <div style='font-weight: 500;'>Continue Metformin 1000mg BID</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        meds = [
+            "Continue Lisinopril 10mg daily",
+            "Continue Metformin 1000mg BID",
+            "Add Prednisone 40mg daily x 5 days",
+            "Add Azithromycin 500mg day 1, then 250mg daily x 4 days"
+        ]
         
-        st.markdown("""
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;'>
-            <div style='display: flex; align-items: center;'>
-                <div style='background: #5e60ce; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;'></div>
-                <div style='font-weight: 500;'>Add Prednisone 40mg daily x 5 days</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
-        
-        st.markdown("""
-        <div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;'>
-            <div style='display: flex; align-items: center;'>
-                <div style='background: #5e60ce; width: 12px; height: 12px; border-radius: 50%; margin-right: 8px;'></div>
-                <div style='font-weight: 500;'>Add Azithromycin 500mg day 1, then 250mg daily x 4 days</div>
-            </div>
-        </div>
-        """, unsafe_allow_html=True)
+        for med in meds:
+            st.markdown(f"<div style='background: #f8f9fa; padding: 10px; border-radius: 8px; margin-bottom: 10px;'>{med}</div>", unsafe_allow_html=True)
         
         new_med = st.text_input("Add medication")
         st.button("+ Add to Plan")
@@ -545,8 +437,6 @@ elif selected == "Generate Note":
                 </ul>
                 
                 <p><strong>Tests:</strong> Chest X-ray, CBC, BMP, HbA1c</p>
-                
-                <p><strong>Instructions:</strong> Take all  CBC, BMP, HbA1c</p>
                 
                 <p><strong>Instructions:</strong> Take all medications as prescribed. Use rescue inhaler as needed for shortness of breath. Follow up in 1 week. Return to ED if symptoms worsen. Continue to monitor blood glucose daily.</p>
                 
